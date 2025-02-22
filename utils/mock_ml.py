@@ -23,6 +23,19 @@ class MockClassifier:
         mean_color = img_array.mean(axis=(0, 1))
         std_color = img_array.std(axis=(0, 1))
 
+        # Calculate color histogram
+        hist_r = np.histogram(img_array[:,:,0], bins=32, range=(0,256))[0]
+        hist_g = np.histogram(img_array[:,:,1], bins=32, range=(0,256))[0]
+        hist_b = np.histogram(img_array[:,:,2], bins=32, range=(0,256))[0]
+
+        # Normalize histograms
+        hist_r = hist_r / hist_r.sum()
+        hist_g = hist_g / hist_g.sum()
+        hist_b = hist_b / hist_b.sum()
+
+        # Calculate texture features using GLCM-like approach
+        texture_features = self._calculate_texture_features(img_array)
+
         # Calculate brightness and contrast
         brightness = mean_color.mean()
         contrast = std_color.mean()
@@ -36,17 +49,48 @@ class MockClassifier:
             'b_ratio': b / total
         }
 
-        # Calculate texture features
-        texture_std = img_array.std(axis=(0, 1)).mean()
-
         return {
             'mean_color': mean_color,
             'std_color': std_color,
             'brightness': brightness,
             'contrast': contrast,
             'color_ratios': color_ratios,
-            'texture': texture_std
+            'histograms': {
+                'r': hist_r,
+                'g': hist_g,
+                'b': hist_b
+            },
+            'texture': texture_features
         }
+
+    def _calculate_texture_features(self, img_array: np.ndarray) -> dict:
+        """Calculate texture features from image"""
+        gray = np.mean(img_array, axis=2)  # Convert to grayscale
+
+        # Calculate gradients
+        grad_x = np.gradient(gray, axis=1)
+        grad_y = np.gradient(gray, axis=0)
+
+        # Calculate gradient magnitude
+        gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+
+        # Calculate statistical features
+        features = {
+            'mean_gradient': np.mean(gradient_magnitude),
+            'std_gradient': np.std(gradient_magnitude),
+            'entropy': self._calculate_entropy(gray),
+            'smoothness': 1 - (1 / (1 + np.std(gray)**2)),
+            'uniformity': np.sum(np.square(np.histogram(gray, bins=32)[0] / gray.size))
+        }
+
+        return features
+
+    def _calculate_entropy(self, gray_image: np.ndarray) -> float:
+        """Calculate image entropy"""
+        histogram = np.histogram(gray_image, bins=32)[0]
+        histogram = histogram / histogram.sum()
+        non_zero = histogram > 0
+        return -np.sum(histogram[non_zero] * np.log2(histogram[non_zero]))
 
     def _classify_product(self, features: dict) -> str:
         """Enhanced crop classification based on image features"""
@@ -55,29 +99,53 @@ class MockClassifier:
             contrast = features['contrast']
             color_ratios = features['color_ratios']
             texture = features['texture']
-            mean_color = features['mean_color']
+            histograms = features['histograms']
 
-            # Rice detection: light colored, low color variation, medium texture
+            # Calculate histogram similarities
+            hist_peaks = {
+                'r': np.argmax(histograms['r']),
+                'g': np.argmax(histograms['g']),
+                'b': np.argmax(histograms['b'])
+            }
+
+            # Rice detection: light colored, uniform texture, high brightness
             if (brightness > 180 and 
-                np.std(mean_color) < 25 and
-                texture > 10 and texture < 40 and
-                color_ratios['r_ratio'] > 0.3 and
-                color_ratios['g_ratio'] > 0.3):
+                texture['uniformity'] > 0.15 and
+                color_ratios['r_ratio'] > 0.33 and
+                color_ratios['g_ratio'] > 0.33 and
+                texture['smoothness'] > 0.8):
                 return "Rice"
 
-            # Corn detection: yellow-dominant
+            # Corn detection: yellow-dominant, medium texture
             elif (color_ratios['r_ratio'] > 0.4 and
                   color_ratios['g_ratio'] > 0.35 and
-                  color_ratios['b_ratio'] < 0.25):
+                  color_ratios['b_ratio'] < 0.25 and
+                  hist_peaks['r'] > hist_peaks['b'] and
+                  texture['mean_gradient'] < 50):
                 return "Corn"
 
-            # Tomatoes detection: red-dominant
+            # Tomatoes detection: red-dominant, smooth texture
             elif (color_ratios['r_ratio'] > 0.45 and
                   color_ratios['g_ratio'] < 0.35 and
-                  color_ratios['b_ratio'] < 0.3):
+                  color_ratios['b_ratio'] < 0.3 and
+                  hist_peaks['r'] > hist_peaks['g'] and
+                  texture['smoothness'] > 0.7):
                 return "Tomatoes"
 
-            # Default to using consistent random choice based on features
+            # Potatoes detection: brown/beige color, rough texture
+            elif (abs(color_ratios['r_ratio'] - color_ratios['g_ratio']) < 0.1 and
+                  color_ratios['b_ratio'] < 0.3 and
+                  texture['mean_gradient'] > 30):
+                return "Potatoes"
+
+            # Wheat detection: yellow/brown, high texture detail
+            elif (color_ratios['r_ratio'] > 0.35 and
+                  color_ratios['g_ratio'] > 0.35 and
+                  color_ratios['b_ratio'] < 0.3 and
+                  texture['entropy'] > 3.5):
+                return "Wheat"
+
+            # Generate consistent random choice based on features if no clear match
             np.random.seed(int(brightness * 1000))
             return np.random.choice(self.products)
 
@@ -93,12 +161,24 @@ class MockClassifier:
             texture = features['texture']
 
             # Calculate quality score based on multiple factors
-            quality_score = (
-                0.4 * (brightness / 255) +
-                0.3 * (min(contrast, 100) / 100) +
-                0.3 * (min(texture, 50) / 50)
+            color_balance = min(
+                features['color_ratios'].values()
+            ) / max(features['color_ratios'].values())
+
+            texture_score = (
+                0.3 * texture['uniformity'] +
+                0.3 * (1 - texture['mean_gradient'] / 100) +
+                0.4 * (1 - texture['entropy'] / 5)
             )
 
+            quality_score = (
+                0.3 * (brightness / 255) +
+                0.2 * (min(contrast, 100) / 100) +
+                0.2 * color_balance +
+                0.3 * texture_score
+            )
+
+            # Determine quality and disease based on scores
             if quality_score > 0.8:
                 quality = "Excellent"
                 disease = "Healthy"
