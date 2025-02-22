@@ -1,7 +1,12 @@
-# 🌾 Agricultural Product Analyzer  
+# 🌾 Agricultural Product Analyzer-AgriSnap 
 An advanced web application to analyze agricultural products using image processing and provide real-time market insights. The app predicts crop quality, detects diseases, and offers historical and predictive price analysis.  
 
 ---
+![Screenshot (23)](https://github.com/user-attachments/assets/d0af09bb-7f19-42e0-9b5a-0363a0241aaf)
+![Screenshot (24)](https://github.com/user-attachments/assets/9b05716e-5563-4699-9b69-482abcc885a4)
+![Screenshot (25)](https://github.com/user-attachments/assets/e7fee5ce-5763-4637-9512-aff17353ab17)
+
+
 
 ## 🚀 Features  
 
@@ -47,8 +52,8 @@ An advanced web application to analyze agricultural products using image process
 ├── price_analyzer.py        # Historical price data analysis  
 ├── price_predictor.py       # Price prediction using ML models  
 ├── database.py              # PostgreSQL database connection management  
-└── requirements.txt         # Python dependencies  
----
+└── requirements.txt         # Python dependencies
+```
 
 ## 🚀 Getting Started  
 
@@ -83,7 +88,7 @@ An advanced web application to analyze agricultural products using image process
 
 ```bash
 streamlit run main.py
-
+```
 ## 🤖 Mock ML Classification  
 - **Image Analysis:** Analyzes color, texture, and patterns.  
 - **Predefined Rules:** Simulates product identification and quality assessment.  
