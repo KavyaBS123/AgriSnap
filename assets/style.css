@@ -1,0 +1,33 @@
+/* Custom styles for the agricultural app */
+.stApp {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.upload-box {
+    border: 2px dashed #4CAF50;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    background-color: #F0F8F0;
+}
+
+.stats-box {
+    background-color: #FFFFFF;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.chart-container {
+    background-color: #FFFFFF;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 20px;
+}
+
+.header-image {
+    max-width: 800px;
+    margin: 0 auto;
+    border-radius: 10px;
+}
