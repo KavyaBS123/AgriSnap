@@ -99,35 +99,58 @@ class PriceAnalyzer:
     def get_price_statistics(self, product: str) -> dict:
         """Calculate price statistics for a product"""
         try:
-            recent_data = self.get_price_history(product, days=30)
+            # Get all price records for the product
+            records = self.db.query(db.PriceRecord).join(db.Product).filter(
+                db.Product.name == product
+            ).order_by(db.PriceRecord.timestamp.desc()).all()
 
-            if recent_data.empty:
-                print(f"No recent price data available for {product}")
+            if not records:
+                print(f"No price records found for {product}")
                 return {
                     'current_price': 0.0,
                     'average_price': 0.0,
-                    'price_change': 0.0
+                    'price_change': 0.0,
+                    'min_price': 0.0,
+                    'max_price': 0.0
                 }
 
-            current_price = float(recent_data['price'].iloc[-1])
-            avg_price = float(recent_data['price'].mean())
+            # Calculate statistics
+            current_price = float(records[0].price)
+            prices = [float(record.price) for record in records[:30]]  # Last 30 days
 
-            # Calculate price change
-            first_price = float(recent_data['price'].iloc[0])
-            if first_price > 0:
-                price_change = float(((current_price - first_price) / first_price) * 100)
+            if not prices:
+                return {
+                    'current_price': 0.0,
+                    'average_price': 0.0,
+                    'price_change': 0.0,
+                    'min_price': 0.0,
+                    'max_price': 0.0
+                }
+
+            avg_price = sum(prices) / len(prices)
+            min_price = min(prices)
+            max_price = max(prices)
+
+            # Calculate price change from previous day
+            if len(prices) > 1:
+                prev_price = prices[1]  # Yesterday's price
+                price_change = ((current_price - prev_price) / prev_price) * 100
             else:
                 price_change = 0.0
 
             return {
                 'current_price': round(current_price, 2),
                 'average_price': round(avg_price, 2),
-                'price_change': round(price_change, 1)
+                'price_change': round(price_change, 1),
+                'min_price': round(min_price, 2),
+                'max_price': round(max_price, 2)
             }
         except Exception as e:
             print(f"Error calculating price statistics: {str(e)}")
             return {
                 'current_price': 0.0,
                 'average_price': 0.0,
-                'price_change': 0.0
+                'price_change': 0.0,
+                'min_price': 0.0,
+                'max_price': 0.0
             }

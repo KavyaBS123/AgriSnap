@@ -85,14 +85,32 @@ with col1:
                             price_data = st.session_state.price_analyzer.get_price_statistics(results['product'])
 
                             st.markdown("### Market Insights")
-                            price_col1, price_col2, price_col3 = st.columns(3)
 
+                            # Display current price and change
+                            price_col1, price_col2 = st.columns(2)
                             with price_col1:
-                                st.metric("Current Price", f"${price_data['current_price']}/kg")
+                                st.metric(
+                                    "Current Price",
+                                    f"${price_data['current_price']:.2f}/kg",
+                                    f"{price_data['price_change']:+.1f}%",
+                                    delta_color="normal"
+                                )
+
+                            # Display average price
                             with price_col2:
-                                st.metric("30-Day Average", f"${price_data['average_price']}/kg")
-                            with price_col3:
-                                st.metric("Price Change", f"{price_data['price_change']}%")
+                                st.metric(
+                                    "30-Day Average",
+                                    f"${price_data['average_price']:.2f}/kg"
+                                )
+
+                            # Display price range
+                            st.markdown("#### Price Range (30 Days)")
+                            range_col1, range_col2 = st.columns(2)
+                            with range_col1:
+                                st.metric("Lowest Price", f"${price_data['min_price']:.2f}/kg")
+                            with range_col2:
+                                st.metric("Highest Price", f"${price_data['max_price']:.2f}/kg")
+
                         else:
                             st.error("Could not analyze the image. Please try uploading a clearer image.")
             except Exception as e:
