@@ -10,6 +10,7 @@ import io
 from utils.image_processor import preprocess_image, enhance_image
 from utils.mock_ml import MockClassifier
 from utils.price_analyzer import PriceAnalyzer
+from utils.price_predictor import PricePredictor
 
 # Page configuration
 st.set_page_config(
@@ -27,6 +28,8 @@ if 'classifier' not in st.session_state:
     st.session_state.classifier = MockClassifier()
 if 'price_analyzer' not in st.session_state:
     st.session_state.price_analyzer = PriceAnalyzer()
+if 'price_predictor' not in st.session_state:
+    st.session_state.price_predictor = PricePredictor()
 
 # Header
 st.title("🌾 Agricultural Product Analyzer")
@@ -110,6 +113,64 @@ with col1:
                                 st.metric("Lowest Price", f"${price_data['min_price']:.2f}/kg")
                             with range_col2:
                                 st.metric("Highest Price", f"${price_data['max_price']:.2f}/kg")
+
+                            # Get real-time price data
+                            real_time_data = st.session_state.price_predictor.get_real_time_price(results['product'])
+
+                            # Real-time price updates
+                            st.markdown("### Real-Time Market Data")
+                            rt_col1, rt_col2 = st.columns(2)
+
+                            with rt_col1:
+                                st.metric(
+                                    "Real-Time Price",
+                                    f"${real_time_data['current_price']:.2f}/kg",
+                                    f"Next Hour: ${real_time_data['next_hour_prediction']:.2f}/kg",
+                                    delta_color="normal"
+                                )
+                            with rt_col2:
+                                st.text(f"Last Updated: {real_time_data['update_time']}")
+
+                            # Price predictions
+                            predictions = st.session_state.price_predictor.predict_price(results['product'])
+
+                            st.markdown("### Price Predictions")
+                            pred_col1, pred_col2 = st.columns(2)
+
+                            with pred_col1:
+                                st.metric(
+                                    "Price Trend",
+                                    predictions['trend'].title(),
+                                    f"Confidence: {predictions['confidence']*100:.1f}%"
+                                )
+
+                            # Create forecast chart
+                            if predictions['forecast']:
+                                forecast_df = pd.DataFrame(predictions['forecast'])
+                                forecast_df['date'] = pd.to_datetime(forecast_df['date'])
+
+                                fig = px.line(
+                                    forecast_df,
+                                    x='date',
+                                    y='price',
+                                    title=f"{results['product']} Price Forecast (7 Days)",
+                                    labels={'date': 'Date', 'price': 'Predicted Price ($/kg)'}
+                                )
+                                fig.update_layout(
+                                    template='plotly_white',
+                                    hovermode='x unified'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Market recommendations based on predictions
+                                st.markdown("### Market Recommendations")
+                                if predictions['trend'] == 'up':
+                                    st.success("📈 Prices are expected to rise - Consider buying now")
+                                elif predictions['trend'] == 'down':
+                                    st.warning("📉 Prices are expected to fall - Consider waiting")
+                                else:
+                                    st.info("📊 Prices are expected to remain stable")
+
 
                         else:
                             st.error("Could not analyze the image. Please try uploading a clearer image.")
