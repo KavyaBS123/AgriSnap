@@ -49,6 +49,10 @@ class MockClassifier:
             'b_ratio': b / total
         }
 
+        # Calculate color variance and standard deviation
+        color_variance = np.var(mean_color)
+        color_std = np.std(mean_color)
+
         return {
             'mean_color': mean_color,
             'std_color': std_color,
@@ -60,7 +64,9 @@ class MockClassifier:
                 'g': hist_g,
                 'b': hist_b
             },
-            'texture': texture_features
+            'texture': texture_features,
+            'color_variance': color_variance,
+            'color_std': color_std
         }
 
     def _calculate_texture_features(self, img_array: np.ndarray) -> dict:
@@ -100,6 +106,8 @@ class MockClassifier:
             color_ratios = features['color_ratios']
             texture = features['texture']
             histograms = features['histograms']
+            color_variance = features['color_variance']
+            color_std = features['color_std']
 
             # Calculate histogram similarities
             hist_peaks = {
@@ -108,12 +116,15 @@ class MockClassifier:
                 'b': np.argmax(histograms['b'])
             }
 
-            # Rice detection: light colored, uniform texture, high brightness
-            if (brightness > 180 and 
-                texture['uniformity'] > 0.15 and
-                color_ratios['r_ratio'] > 0.33 and
-                color_ratios['g_ratio'] > 0.33 and
-                texture['smoothness'] > 0.8):
+            # Rice detection: light colored, very uniform texture, low color variance
+            if ((brightness > 160 and brightness < 220) and  # Typical rice brightness range
+                color_variance < 100 and  # Low color variation
+                color_std < 15 and  # Consistent color
+                texture['uniformity'] > 0.2 and  # High uniformity
+                texture['smoothness'] > 0.7 and  # Smooth texture
+                abs(color_ratios['r_ratio'] - color_ratios['g_ratio']) < 0.1 and  # Similar R-G ratio
+                color_ratios['b_ratio'] < 0.34 and  # Low blue component
+                texture['entropy'] < 3.0):  # Low texture entropy
                 return "Rice"
 
             # Corn detection: yellow-dominant, medium texture
@@ -159,6 +170,7 @@ class MockClassifier:
             brightness = features['brightness']
             contrast = features['contrast']
             texture = features['texture']
+            color_variance = features['color_variance']
 
             # Calculate quality score based on multiple factors
             color_balance = min(
@@ -171,11 +183,15 @@ class MockClassifier:
                 0.4 * (1 - texture['entropy'] / 5)
             )
 
+            # Add color consistency to quality assessment
+            color_consistency = 1 - (color_variance / 1000)  # Normalize variance
+
             quality_score = (
-                0.3 * (brightness / 255) +
-                0.2 * (min(contrast, 100) / 100) +
+                0.25 * (brightness / 255) +
+                0.15 * (min(contrast, 100) / 100) +
                 0.2 * color_balance +
-                0.3 * texture_score
+                0.25 * texture_score +
+                0.15 * color_consistency
             )
 
             # Determine quality and disease based on scores
