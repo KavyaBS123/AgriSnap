@@ -13,10 +13,19 @@ class PriceAnalyzer:
 
     def _ensure_sample_data(self):
         """Ensure sample data exists in database"""
-        products = ["Tomatoes", "Potatoes", "Wheat", "Corn", 
-                   "Soybeans", "Rice", "Apples", "Oranges"]
+        # Define realistic base prices and seasonal patterns for each product
+        product_configs = {
+            "Rice": {"base_price": 2.50, "seasonal_shift": 90, "volatility": 0.10},
+            "Wheat": {"base_price": 1.80, "seasonal_shift": 60, "volatility": 0.12},
+            "Corn": {"base_price": 1.50, "seasonal_shift": 30, "volatility": 0.15},
+            "Soybeans": {"base_price": 2.20, "seasonal_shift": 45, "volatility": 0.13},
+            "Tomatoes": {"base_price": 3.50, "seasonal_shift": 0, "volatility": 0.20},
+            "Potatoes": {"base_price": 1.20, "seasonal_shift": 120, "volatility": 0.15},
+            "Apples": {"base_price": 2.80, "seasonal_shift": 180, "volatility": 0.18},
+            "Oranges": {"base_price": 2.60, "seasonal_shift": 150, "volatility": 0.16}
+        }
 
-        for product_name in products:
+        for product_name, config in product_configs.items():
             # Check if product exists
             product = self.db.query(db.Product).filter(
                 db.Product.name == product_name
@@ -28,39 +37,32 @@ class PriceAnalyzer:
                 self.db.add(product)
                 self.db.commit()
 
-                # Generate sample price data
-                base_price = float(np.random.uniform(0.5, 5.0))  # Convert to Python float
-
-                # Adjust base price for different products
-                if product_name == "Rice":
-                    base_price = float(2.5)  # Set realistic base price for rice
-                elif product_name == "Corn":
-                    base_price = float(1.8)  # Set realistic base price for corn
+                # Generate price data with realistic patterns
+                base_price = float(config["base_price"])
+                seasonal_shift = config["seasonal_shift"]
+                volatility = config["volatility"]
 
                 dates = pd.date_range(start='2023-01-01', end='2023-12-31', freq='D')
 
                 for date in dates:
-                    # Add seasonal variation (different patterns for different products)
+                    # Add seasonal variation with product-specific patterns
                     day_of_year = date.dayofyear
-                    if product_name in ["Rice", "Wheat", "Corn"]:
-                        # Grains have different seasonal patterns
-                        seasonal = float(0.15 * np.sin(2 * np.pi * (day_of_year + 90) / 365))
-                    else:
-                        seasonal = float(0.2 * np.sin(2 * np.pi * day_of_year / 365))
+                    seasonal = float(0.15 * np.sin(2 * np.pi * (day_of_year + seasonal_shift) / 365))
 
-                    # Add market trends
-                    trend = float(0.1 * (date - dates[0]).days / 365)
+                    # Add gradual market trend (slight upward bias)
+                    trend = float(0.05 * (date - dates[0]).days / 365)
 
-                    # Add random noise
-                    noise = float(np.random.normal(0, 0.02))
+                    # Add controlled random noise
+                    noise = float(np.random.normal(0, volatility / 3))
 
-                    # Calculate final price
+                    # Calculate final price with bounds
                     price = base_price * (1 + seasonal + trend + noise)
+                    price = float(max(base_price * 0.7, min(base_price * 1.5, price)))
 
                     price_record = db.PriceRecord(
                         product_id=product.id,
-                        timestamp=date.to_pydatetime(),  # Convert pandas timestamp to Python datetime
-                        price=float(round(max(price, 0.1), 2))  # Convert to Python float
+                        timestamp=date.to_pydatetime(),
+                        price=float(round(price, 2))
                     )
                     self.db.add(price_record)
 
@@ -79,10 +81,14 @@ class PriceAnalyzer:
                 db.PriceRecord.timestamp <= end_date
             ).order_by(db.PriceRecord.timestamp).all()
 
+            if not records:
+                print(f"No price records found for {product}")
+                return pd.DataFrame(columns=['date', 'price'])
+
             # Convert to DataFrame
             data = [{
                 'date': record.timestamp,
-                'price': record.price
+                'price': float(record.price)  # Ensure price is float
             } for record in records]
 
             return pd.DataFrame(data)
@@ -96,6 +102,7 @@ class PriceAnalyzer:
             recent_data = self.get_price_history(product, days=30)
 
             if recent_data.empty:
+                print(f"No recent price data available for {product}")
                 return {
                     'current_price': 0.0,
                     'average_price': 0.0,
@@ -104,8 +111,13 @@ class PriceAnalyzer:
 
             current_price = float(recent_data['price'].iloc[-1])
             avg_price = float(recent_data['price'].mean())
-            price_change = float(((current_price - recent_data['price'].iloc[0]) / 
-                         recent_data['price'].iloc[0] * 100))
+
+            # Calculate price change
+            first_price = float(recent_data['price'].iloc[0])
+            if first_price > 0:
+                price_change = float(((current_price - first_price) / first_price) * 100)
+            else:
+                price_change = 0.0
 
             return {
                 'current_price': round(current_price, 2),
